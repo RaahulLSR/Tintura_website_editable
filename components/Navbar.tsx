@@ -4,8 +4,8 @@ import { Menu, X, ShoppingBag, Settings } from 'lucide-react';
 import { Category } from '../types';
 
 interface NavbarProps {
-  activeCategory: Category | 'ALL' | 'ADMIN';
-  onCategoryChange: (cat: Category | 'ALL' | 'ADMIN') => void;
+  activeCategory: Category | 'ALL' | 'ADMIN' | string;
+  onCategoryChange: (cat: Category | 'ALL' | 'ADMIN' | string) => void;
 }
 
 const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => {
@@ -13,10 +13,9 @@ const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => 
 
   const navItems = [
     { label: 'ALL', value: 'ALL' },
-    { label: 'CASUALS', value: Category.CASUALS },
-    { label: 'SPORTZ', value: Category.SPORTZ },
-    { label: 'BOYS', value: Category.BOYS },
-    { label: 'LITE', value: Category.LITE },
+    { label: 'CASUALS', value: 'CASUALS' },
+    { label: 'SPORTZ', value: 'SPORTZ' },
+    { label: 'LITE', value: 'LITE' },
   ];
 
   return (
@@ -38,7 +37,7 @@ const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => 
             {navItems.map((item) => (
               <button
                 key={item.label}
-                onClick={() => onCategoryChange(item.value as Category | 'ALL')}
+                onClick={() => onCategoryChange(item.value)}
                 className={`font-display font-medium tracking-wide text-lg transition-colors duration-200 ${
                   activeCategory === item.value 
                     ? 'text-tintura-red border-b-2 border-tintura-red' 
@@ -59,12 +58,6 @@ const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => 
             </button>
           </div>
 
-          <div className="hidden md:flex items-center space-x-4">
-            <button className="text-gray-600 hover:text-tintura-red transition-colors">
-              <ShoppingBag className="w-6 h-6" />
-            </button>
-          </div>
-
           <div className="md:hidden flex items-center">
              <button onClick={() => setIsOpen(!isOpen)} className="text-gray-800 focus:outline-none">
               {isOpen ? <X className="w-8 h-8" /> : <Menu className="w-8 h-8" />}
@@ -79,10 +72,10 @@ const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => 
               <button
                 key={item.label}
                 onClick={() => {
-                  onCategoryChange(item.value as Category | 'ALL');
+                  onCategoryChange(item.value);
                   setIsOpen(false);
                 }}
-                className={`block w-full text-left px-3 py-3 font-display font-bold text-xl ${
+                className={`block w-full text-left px-3 py-3 font-display font-bold text-xl uppercase ${
                    activeCategory === item.value ? 'text-tintura-red bg-red-50' : 'text-gray-800'
                 }`}
               >
