@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Product, Category } from '../types';
-import { Plus, Trash2, Edit2, Upload, X, Save, FileText, Loader2, AlertCircle, CheckCircle2, Database, Image as ImageIcon, PlusCircle } from 'lucide-react';
-import Papa from 'papaparse';
+import { Product } from '../types';
+import { Plus, Trash2, Edit2, X, Save, Loader2, AlertCircle, Image as ImageIcon, PlusCircle } from 'lucide-react';
 
 const AdminView: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -11,7 +10,6 @@ const AdminView: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [dbStatus, setDbStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   
   // New State for dynamic options
   const [categories, setCategories] = useState<string[]>(['CASUALS', 'LITE', 'SPORTZ']);
@@ -19,20 +17,9 @@ const AdminView: React.FC = () => {
   const [newFeature, setNewFeature] = useState('');
 
   useEffect(() => {
-    checkConnection();
     fetchProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const checkConnection = async () => {
-    try {
-      const { error } = await supabase.from('products').select('count', { count: 'exact', head: true });
-      if (error) throw error;
-      setDbStatus('connected');
-    } catch (err) {
-      console.error('Connection check failed:', err);
-      setDbStatus('error');
-    }
-  };
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -48,8 +35,8 @@ const AdminView: React.FC = () => {
       setProducts(data || []);
       // Extract unique categories and targets to populate dropdowns
       if (data) {
-        const uniqueCats = Array.from(new Set([...categories, ...data.map(p => p.category)]));
-        const uniqueTypes = Array.from(new Set([...garmentTypes, ...data.map(p => p.garment_type)]));
+        const uniqueCats = Array.from(new Set([...['CASUALS', 'LITE', 'SPORTZ'], ...data.map(p => p.category)]));
+        const uniqueTypes = Array.from(new Set([...['MENS', 'BOYS'], ...data.map(p => p.garment_type)]));
         setCategories(uniqueCats);
         setGarmentTypes(uniqueTypes);
       }
@@ -209,7 +196,7 @@ const AdminView: React.FC = () => {
           <tbody className="divide-y divide-gray-100">
             {products.map(p => (
               <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3"><img src={p.image_url} className="w-10 h-14 object-cover rounded-sm bg-gray-100" /></td>
+                <td className="px-6 py-3"><img src={p.image_url} alt="" className="w-10 h-14 object-cover rounded-sm bg-gray-100" /></td>
                 <td className="px-6 py-3 font-mono text-sm">#{p.style_code}</td>
                 <td className="px-6 py-3 font-bold">{p.name}</td>
                 <td className="px-6 py-3"><span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-black">{p.garment_type}</span></td>
@@ -306,7 +293,7 @@ const AdminView: React.FC = () => {
                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Image Upload</label>
                 <div className="flex items-center space-x-4 border-2 border-dashed p-6 rounded-sm">
                   {editingProduct.image_url ? (
-                    <img src={editingProduct.image_url} className="w-16 h-20 object-cover bg-gray-50" />
+                    <img src={editingProduct.image_url} alt="" className="w-16 h-20 object-cover bg-gray-50" />
                   ) : (
                     <div className="w-16 h-20 bg-gray-50 flex items-center justify-center"><ImageIcon className="text-gray-300" /></div>
                   )}

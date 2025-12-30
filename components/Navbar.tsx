@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Menu, X, ShoppingBag, Settings } from 'lucide-react';
+import { Menu, X, Settings } from 'lucide-react';
 import { Category } from '../types';
 
 interface NavbarProps {
