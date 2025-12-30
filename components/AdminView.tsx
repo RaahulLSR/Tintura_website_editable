@@ -10,6 +10,7 @@ const AdminView: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
   
   // State for dynamic options
   const [categories, setCategories] = useState<string[]>(['CASUALS', 'LITE', 'SPORTZ']);
@@ -66,13 +67,13 @@ const AdminView: React.FC = () => {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
-          if (!ctx) { reject(new Error('Canvas error')); return; }
+          if (!ctx) { reject(new Error('Canvas context error')); return; }
           ctx.drawImage(img, 0, 0, width, height);
           canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('WebP conversion failed')), 'image/webp', 0.85);
         };
-        img.onerror = () => reject(new Error('Load error'));
+        img.onerror = () => reject(new Error('Image failed to load for conversion'));
       };
-      reader.onerror = () => reject(new Error('Read error'));
+      reader.onerror = () => reject(new Error('FileReader failed to read image'));
     });
   };
 
@@ -80,7 +81,9 @@ const AdminView: React.FC = () => {
     e.preventDefault();
     if (!editingProduct) return;
 
+    setErrorMsg(null);
     setLoading(true);
+    
     const productData: any = {
       style_code: editingProduct.style_code?.toString() || '',
       name: editingProduct.name || 'Unnamed Style',
@@ -95,6 +98,11 @@ const AdminView: React.FC = () => {
     };
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+          throw new Error("Admin session not found. Please re-enter OTP.");
+      }
+
       if (editingProduct.id) {
         const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
         if (error) throw error;
@@ -103,9 +111,11 @@ const AdminView: React.FC = () => {
         if (error) throw error;
       }
       setEditingProduct(null);
+      setLocalPreview(null);
       fetchProducts();
     } catch (error: any) {
-      setErrorMsg(`Database Error: ${error.message}`);
+      console.error('Database Save Error:', error);
+      setErrorMsg(`Save failed: ${error.message}. Ensure you have run the RLS policy SQL in your Supabase dashboard.`);
     } finally {
       setLoading(false);
     }
@@ -142,20 +152,63 @@ const AdminView: React.FC = () => {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    // Immediate Local Preview
+    const previewUrl = URL.createObjectURL(file);
+    setLocalPreview(previewUrl);
+    setErrorMsg(null);
     setUploading(true);
+    
+    console.log("Starting upload for file:", file.name);
+
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+          throw new Error("Auth session missing. Refresh the page and login again.");
+      }
+
       const webpBlob = await convertToWebP(file);
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
-      const filePath = `covers/${fileName}`;
-      const { error } = await supabase.storage.from('Products').upload(filePath, webpBlob, { contentType: 'image/webp' });
-      if (error) throw error;
+      console.log("WebP conversion complete. Size:", (webpBlob.size / 1024).toFixed(2), "KB");
+
+      const fileName = `style-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
+      // Using root level to minimize permission complexity
+      const filePath = fileName;
+      
+      console.log("Uploading to Supabase bucket 'Products' at path:", filePath);
+
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from('Products')
+        .upload(filePath, webpBlob, { 
+            contentType: 'image/webp',
+            cacheControl: '3600',
+            upsert: false
+        });
+        
+      if (uploadError) {
+        console.error("Supabase Storage Error:", uploadError);
+        throw uploadError;
+      }
+      
+      console.log("Upload success:", uploadData);
+
       const { data } = supabase.storage.from('Products').getPublicUrl(filePath);
+      console.log("Generated Public URL:", data.publicUrl);
+
       setEditingProduct(prev => ({ ...prev, image_url: data.publicUrl }));
+      setErrorMsg(null); // Clear errors on success
     } catch (err: any) {
-      setErrorMsg(`Upload error: ${err.message}`);
+      console.error('Detailed Upload Failure:', err);
+      setErrorMsg(`Upload failed: ${err.message}. If you see 'violates row-level security policy', you MUST run the SQL for Storage RLS in Supabase.`);
+      setLocalPreview(null); // Reset preview if upload failed
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCloseEditor = () => {
+    setEditingProduct(null);
+    setLocalPreview(null);
+    setErrorMsg(null);
   };
 
   return (
@@ -163,7 +216,7 @@ const AdminView: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
         <div>
           <h1 className="text-4xl font-display font-bold text-tintura-black uppercase tracking-tight">Style Inventory</h1>
-          <p className="text-gray-500">Row-wise database management for collections.</p>
+          <p className="text-gray-500">Manage your collections and performance features.</p>
         </div>
         <button 
           onClick={() => setEditingProduct({ category: 'CASUALS', garment_type: 'MENS', features: [] })}
@@ -175,10 +228,15 @@ const AdminView: React.FC = () => {
       </div>
 
       {errorMsg && (
-        <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 flex items-start space-x-3">
+        <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 flex items-start space-x-3 animate-in fade-in slide-in-from-top-4 duration-300">
           <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
-          <p className="text-red-700 text-sm">{errorMsg}</p>
-          <button onClick={() => setErrorMsg(null)} className="ml-auto"><X className="w-4 h-4 text-red-400" /></button>
+          <div className="flex-grow">
+            <p className="text-red-700 text-sm font-bold uppercase mb-1">Upload or Database Error</p>
+            <p className="text-red-600 text-xs">{errorMsg}</p>
+          </div>
+          <button onClick={() => setErrorMsg(null)} className="ml-auto p-1 hover:bg-red-100 rounded-full transition-colors">
+            <X className="w-4 h-4 text-red-400" />
+          </button>
         </div>
       )}
 
@@ -221,7 +279,7 @@ const AdminView: React.FC = () => {
                     <td className="px-6 py-3 text-right">
                       <div className="flex justify-end space-x-2">
                         <button onClick={() => setEditingProduct(p)} className="p-2 text-gray-400 hover:text-tintura-accent transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={async () => { if(confirm('Delete this style permanently?')) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); }}} className="p-2 text-gray-400 hover:text-tintura-red transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={async () => { if(confirm('Delete this style permanently?')) { try { const { error } = await supabase.from('products').delete().eq('id', p.id); if (error) throw error; fetchProducts(); } catch (err: any) { setErrorMsg(err.message); } }}} className="p-2 text-gray-400 hover:text-tintura-red transition-colors"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -234,13 +292,13 @@ const AdminView: React.FC = () => {
 
       {editingProduct && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setEditingProduct(null)}></div>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={handleCloseEditor}></div>
           <div className="relative bg-white w-full max-w-3xl p-8 rounded-sm shadow-2xl overflow-y-auto max-h-[90vh] border-t-8 border-tintura-red">
             <div className="flex justify-between items-center mb-8 border-b pb-4">
               <h2 className="text-2xl font-display font-bold uppercase tracking-tight">
                 {editingProduct.id ? 'Edit Style Details' : 'Register New Style'}
               </h2>
-              <button onClick={() => setEditingProduct(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+              <button onClick={handleCloseEditor} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
@@ -315,22 +373,32 @@ const AdminView: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Style Visual (WebP optimized)</label>
                 <div className="flex items-center space-x-4 border-2 border-dashed border-gray-200 p-6 rounded-sm bg-gray-50">
-                  {editingProduct.image_url ? (
-                    <div className="w-16 h-20 bg-white border p-1"><img src={editingProduct.image_url} alt="" className="w-full h-full object-cover" /></div>
+                  {(localPreview || editingProduct.image_url) ? (
+                    <div className="w-16 h-20 bg-white border p-1 group relative">
+                        <img src={localPreview || editingProduct.image_url} alt="" className="w-full h-full object-cover" />
+                        {uploading && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                            <Loader2 className="w-5 h-5 animate-spin text-white" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Plus className="text-white w-4 h-4" />
+                        </div>
+                    </div>
                   ) : (
                     <div className="w-16 h-20 bg-white flex items-center justify-center border-2 border-dashed border-gray-300"><ImageIcon className="text-gray-300" /></div>
                   )}
                   <div className="flex-grow">
                     <label className="cursor-pointer bg-tintura-black text-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-tintura-red transition-all inline-block shadow-md">
-                      {uploading ? 'Processing Image...' : 'Select File'}
+                      {uploading ? 'Processing Image...' : (localPreview || editingProduct.image_url ? 'Change Image' : 'Select File')}
                       <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
                     </label>
-                    <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase">PNG, JPG or WEBP supported.</p>
+                    <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase">Optimized WebP conversion will run automatically.</p>
                   </div>
                 </div>
               </div>
 
-              <button disabled={loading || uploading} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
+              <button disabled={loading || uploading || (!editingProduct.image_url && !localPreview)} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
                 {loading ? <Loader2 className="animate-spin" /> : <Save />}
                 <span>{editingProduct.id ? 'UPDATE DATABASE RECORD' : 'COMMIT TO DATABASE'}</span>
               </button>
