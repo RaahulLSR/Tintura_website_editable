@@ -1,5 +1,4 @@
 
-// Add missing React import to fix namespace error in handleVerifyOtp event type
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -42,17 +41,20 @@ function App() {
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (error) console.error(error);
-    else {
+    try {
+      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
       setProducts(data || []);
       const allFeats = data?.reduce((acc: string[], p: any) => {
         if (p.features) return [...acc, ...p.features];
         return acc;
       }, []) || [];
       setAvailableFeatures(Array.from(new Set(allFeats)));
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -69,12 +71,19 @@ function App() {
   const handleCategoryChange = (cat: string | 'ALL' | 'ADMIN') => {
       setActiveCategory(cat);
       setActiveFeature(null);
+      // If switching to admin, reset auth UI state but keep session if it exists
+      if (cat === 'ADMIN') {
+        setOtpSent(false);
+        setOtpCode('');
+        setAuthError(null);
+      }
   };
 
   const handleRequestOtp = async () => {
     setAuthLoading(true);
     setAuthError(null);
     try {
+      // This sends the 6-digit code using the 'Magic Link' template in Supabase
       const { error } = await supabase.auth.signInWithOtp({
         email: ADMIN_EMAIL,
         options: {
@@ -84,7 +93,7 @@ function App() {
       if (error) throw error;
       setOtpSent(true);
     } catch (err: any) {
-      setAuthError(err.message || 'Failed to send OTP. Check your Supabase configuration.');
+      setAuthError(err.message || 'Failed to send code. Check your Supabase configuration.');
     } finally {
       setAuthLoading(false);
     }
@@ -100,16 +109,20 @@ function App() {
       const { data, error } = await supabase.auth.verifyOtp({
         email: ADMIN_EMAIL,
         token: otpCode,
-        type: 'email',
+        type: 'email', // 'email' type handles 6-digit tokens
       });
+      
       if (error) throw error;
+      
       if (data.session) {
         setIsAdminAuthenticated(true);
         setOtpSent(false);
         setOtpCode('');
+      } else {
+        throw new Error("Verification failed. Please try again.");
       }
     } catch (err: any) {
-      setAuthError('Invalid code. Please try again.');
+      setAuthError(err.message || 'Invalid code. Please check your email.');
     } finally {
       setAuthLoading(false);
     }
@@ -132,8 +145,8 @@ function App() {
                 </h2>
                 <p className="text-gray-500 text-sm mt-2">
                   {otpSent 
-                    ? `A 6-digit code has been sent to ${ADMIN_EMAIL}`
-                    : 'This area is restricted to authorized personnel only.'}
+                    ? `Check your email ${ADMIN_EMAIL} for the 6-digit code.`
+                    : 'This area is restricted to the database administrator.'}
                 </p>
               </div>
 
@@ -147,10 +160,10 @@ function App() {
                 <button 
                   onClick={handleRequestOtp}
                   disabled={authLoading}
-                  className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all flex items-center justify-center space-x-3 group"
+                  className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all flex items-center justify-center space-x-3 group disabled:opacity-70"
                 >
                   {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                  <span className="tracking-widest">REQUEST OTP CODE</span>
+                  <span className="tracking-widest">SEND 6-DIGIT CODE</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               ) : (
@@ -160,8 +173,8 @@ function App() {
                       autoFocus
                       type="text"
                       maxLength={6}
-                      placeholder="0 0 0 0 0 0"
-                      className="w-full text-center text-4xl font-display font-bold tracking-[0.5em] border-b-4 border-tintura-black py-4 outline-none focus:border-tintura-red transition-colors"
+                      placeholder="· · · · · ·"
+                      className="w-full text-center text-4xl font-display font-bold tracking-[0.5em] border-b-4 border-tintura-black py-4 outline-none focus:border-tintura-red transition-colors placeholder:text-gray-200"
                       value={otpCode}
                       onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                     />
@@ -172,10 +185,11 @@ function App() {
                     className="w-full bg-tintura-red text-white font-black py-4 hover:bg-tintura-black transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
                   >
                     {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                    <span className="tracking-widest uppercase">VERIFY & ENTER</span>
+                    <span className="tracking-widest uppercase">VERIFY PASSCODE</span>
                   </button>
                   <button 
                     type="button"
+                    disabled={authLoading}
                     onClick={() => { setOtpSent(false); setAuthError(null); }}
                     className="w-full text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-tintura-black transition-colors"
                   >
@@ -261,7 +275,7 @@ function App() {
           <div className="relative bg-white w-full max-w-5xl max-h-[95vh] overflow-y-auto shadow-2xl flex flex-col md:flex-row animate-in fade-in zoom-in duration-300">
             <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 z-10 bg-white/50 p-2 rounded-full hover:bg-white"><X className="w-6 h-6" /></button>
 
-            <div className="w-full md:w-1/2 bg-gray-100"><img src={selectedProduct.image_url} className="w-full h-full object-cover min-h-[500px]" /></div>
+            <div className="w-full md:w-1/2 bg-gray-100"><img src={selectedProduct.image_url} alt="" className="w-full h-full object-cover min-h-[500px]" /></div>
 
             <div className="w-full md:w-1/2 p-8 md:p-12">
                 <div className="flex items-center space-x-2 text-[10px] font-black text-tintura-red mb-2 uppercase tracking-widest">
