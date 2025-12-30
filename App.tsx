@@ -29,14 +29,16 @@ function App() {
   const ADMIN_EMAIL = 'raahullsr@gmail.com';
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session?.user?.email === ADMIN_EMAIL) {
-        setIsAdminAuthenticated(true);
-      }
+    // FORCE OTP ON REFRESH:
+    // We explicitly sign out and do NOT check for an existing session on mount.
+    // This ensures that refreshing the page always resets the admin access.
+    const clearSessionAndFetch = async () => {
+      await supabase.auth.signOut();
+      setIsAdminAuthenticated(false);
+      await fetchAll();
     };
-    checkSession();
-    fetchAll();
+    
+    clearSessionAndFetch();
   }, []);
 
   const fetchAll = async () => {
@@ -71,7 +73,7 @@ function App() {
   const handleCategoryChange = (cat: string | 'ALL' | 'ADMIN') => {
       setActiveCategory(cat);
       setActiveFeature(null);
-      // If switching to admin, reset auth UI state but keep session if it exists
+      // Reset local UI state when entering admin area
       if (cat === 'ADMIN') {
         setOtpSent(false);
         setOtpCode('');
@@ -83,7 +85,6 @@ function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      // This sends the 6-digit code using the 'Magic Link' template in Supabase
       const { error } = await supabase.auth.signInWithOtp({
         email: ADMIN_EMAIL,
         options: {
@@ -109,7 +110,7 @@ function App() {
       const { data, error } = await supabase.auth.verifyOtp({
         email: ADMIN_EMAIL,
         token: otpCode,
-        type: 'email', // 'email' type handles 6-digit tokens
+        type: 'email', // type 'email' handles 6-digit tokens for signInWithOtp
       });
       
       if (error) throw error;
@@ -129,10 +130,7 @@ function App() {
   };
 
   const handleInquiryToPurchase = () => {
-    // 1. Close the modal
     setSelectedProduct(null);
-    
-    // 2. Small timeout to allow modal fade out, then scroll
     setTimeout(() => {
       const contactSection = document.getElementById('contact-section');
       if (contactSection) {
@@ -158,8 +156,8 @@ function App() {
                 </h2>
                 <p className="text-gray-500 text-sm mt-2">
                   {otpSent 
-                    ? `Check your email ${ADMIN_EMAIL} for the 6-digit code.`
-                    : 'This area is restricted to the database administrator.'}
+                    ? `Check ${ADMIN_EMAIL} for the 6-digit code.`
+                    : 'Security verification required to manage inventory.'}
                 </p>
               </div>
 
