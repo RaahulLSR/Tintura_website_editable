@@ -1,9 +1,10 @@
+
 import React from 'react';
 import { MapPin, Phone, Mail, Instagram, Facebook } from 'lucide-react';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-tintura-black text-white pt-16 pb-8">
+    <footer id="contact-section" className="bg-tintura-black text-white pt-16 pb-8 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid md:grid-cols-3 gap-12 mb-12">
           

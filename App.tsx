@@ -128,6 +128,19 @@ function App() {
     }
   };
 
+  const handleInquiryToPurchase = () => {
+    // 1. Close the modal
+    setSelectedProduct(null);
+    
+    // 2. Small timeout to allow modal fade out, then scroll
+    setTimeout(() => {
+      const contactSection = document.getElementById('contact-section');
+      if (contactSection) {
+        contactSection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 150);
+  };
+
   if (activeCategory === 'ADMIN') {
     if (!isAdminAuthenticated) {
       return (
@@ -323,7 +336,12 @@ function App() {
                   </div>
                 )}
                 
-                <button className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all uppercase tracking-widest text-sm">Inquiry to Purchase</button>
+                <button 
+                  onClick={handleInquiryToPurchase}
+                  className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all uppercase tracking-widest text-sm"
+                >
+                  Inquiry to Purchase
+                </button>
             </div>
           </div>
         </div>
