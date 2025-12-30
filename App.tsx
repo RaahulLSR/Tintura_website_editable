@@ -1,5 +1,6 @@
 
-import { useState, useEffect } from 'react';
+// Add missing React import to fix namespace error in handleVerifyOtp event type
+import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import FeaturesSection from './components/FeaturesSection';
@@ -8,7 +9,7 @@ import ProductCard from './components/ProductCard';
 import AdminView from './components/AdminView';
 import { supabase } from './lib/supabase';
 import { Product } from './types';
-import { X, Check, Filter, Loader2, Tag, Ruler, Box } from 'lucide-react';
+import { X, Check, Filter, Loader2, Tag, Ruler, Box, Lock, ShieldCheck, Mail, ArrowRight } from 'lucide-react';
 
 function App() {
   const [activeCategory, setActiveCategory] = useState<string | 'ALL' | 'ADMIN'>('ALL');
@@ -17,30 +18,42 @@ function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dynamicCategories, setDynamicCategories] = useState<string[]>([]);
   const [availableFeatures, setAvailableFeatures] = useState<string[]>([]);
+  
+  // Auth State
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const ADMIN_EMAIL = 'raahullsr@gmail.com';
 
   useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
-      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-      if (error) console.error(error);
-      else {
-        setProducts(data || []);
-        // Extract unique categories and features for filtering
-        const cats = Array.from(new Set(data?.map(p => p.category) || []));
-        setDynamicCategories(cats);
-        
-        const allFeats = data?.reduce((acc: string[], p: any) => {
-          if (p.features) return [...acc, ...p.features];
-          return acc;
-        }, []) || [];
-        setAvailableFeatures(Array.from(new Set(allFeats)));
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user?.email === ADMIN_EMAIL) {
+        setIsAdminAuthenticated(true);
       }
-      setLoading(false);
     };
+    checkSession();
     fetchAll();
   }, []);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (error) console.error(error);
+    else {
+      setProducts(data || []);
+      const allFeats = data?.reduce((acc: string[], p: any) => {
+        if (p.features) return [...acc, ...p.features];
+        return acc;
+      }, []) || [];
+      setAvailableFeatures(Array.from(new Set(allFeats)));
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     let result = products;
@@ -58,7 +71,125 @@ function App() {
       setActiveFeature(null);
   };
 
+  const handleRequestOtp = async () => {
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: ADMIN_EMAIL,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+      if (error) throw error;
+      setOtpSent(true);
+    } catch (err: any) {
+      setAuthError(err.message || 'Failed to send OTP. Check your Supabase configuration.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (otpCode.length !== 6) return;
+    
+    setAuthLoading(true);
+    setAuthError(null);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: ADMIN_EMAIL,
+        token: otpCode,
+        type: 'email',
+      });
+      if (error) throw error;
+      if (data.session) {
+        setIsAdminAuthenticated(true);
+        setOtpSent(false);
+        setOtpCode('');
+      }
+    } catch (err: any) {
+      setAuthError('Invalid code. Please try again.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   if (activeCategory === 'ADMIN') {
+    if (!isAdminAuthenticated) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col">
+          <Navbar activeCategory={'ADMIN'} onCategoryChange={handleCategoryChange as any} />
+          
+          <div className="flex-grow flex items-center justify-center p-4 bg-gray-50">
+            <div className="w-full max-w-md bg-white border-2 border-tintura-black p-8 md:p-12 shadow-[12px_12px_0px_0px_rgba(26,26,26,0.1)]">
+              <div className="flex flex-col items-center text-center mb-10">
+                <div className="w-20 h-20 bg-tintura-red/5 rounded-full flex items-center justify-center mb-6">
+                  {otpSent ? <Mail className="w-10 h-10 text-tintura-red" /> : <Lock className="w-10 h-10 text-tintura-black" />}
+                </div>
+                <h2 className="text-3xl font-display font-bold uppercase tracking-tight text-tintura-black">
+                  {otpSent ? 'Enter Passcode' : 'Admin Access'}
+                </h2>
+                <p className="text-gray-500 text-sm mt-2">
+                  {otpSent 
+                    ? `A 6-digit code has been sent to ${ADMIN_EMAIL}`
+                    : 'This area is restricted to authorized personnel only.'}
+                </p>
+              </div>
+
+              {authError && (
+                <div className="mb-6 p-4 bg-red-50 text-red-600 text-xs font-bold uppercase border-l-4 border-red-500">
+                  {authError}
+                </div>
+              )}
+
+              {!otpSent ? (
+                <button 
+                  onClick={handleRequestOtp}
+                  disabled={authLoading}
+                  className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all flex items-center justify-center space-x-3 group"
+                >
+                  {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                  <span className="tracking-widest">REQUEST OTP CODE</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-6">
+                  <div>
+                    <input 
+                      autoFocus
+                      type="text"
+                      maxLength={6}
+                      placeholder="0 0 0 0 0 0"
+                      className="w-full text-center text-4xl font-display font-bold tracking-[0.5em] border-b-4 border-tintura-black py-4 outline-none focus:border-tintura-red transition-colors"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={authLoading || otpCode.length !== 6}
+                    className="w-full bg-tintura-red text-white font-black py-4 hover:bg-tintura-black transition-all flex items-center justify-center space-x-3 disabled:opacity-50"
+                  >
+                    {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
+                    <span className="tracking-widest uppercase">VERIFY & ENTER</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => { setOtpSent(false); setAuthError(null); }}
+                    className="w-full text-gray-400 text-[10px] font-black uppercase tracking-widest hover:text-tintura-black transition-colors"
+                  >
+                    Resend Code
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+          <Footer />
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-white">
         <Navbar activeCategory={'ADMIN'} onCategoryChange={handleCategoryChange as any} />
