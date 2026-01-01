@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../types';
-import { Plus, Trash2, Edit2, X, Save, Loader2, AlertCircle, Image as ImageIcon, PlusCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Save, Loader2, AlertCircle, PlusCircle, ArrowUp, ArrowDown } from 'lucide-react';
 
 const AdminView: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
