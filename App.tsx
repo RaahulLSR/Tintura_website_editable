@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -28,7 +27,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Fix: Replaced NodeJS.Timeout with any for browser-specific return types of setInterval
+  // Fix: Replaced any with a specific type or any for browser-specific return types of setInterval
   const slideshowTimerRef = useRef<any>(null);
 
   const ADMIN_EMAIL = 'raahullsr@gmail.com';
@@ -174,16 +173,17 @@ function App() {
           </button>
 
           {/* Image Slideshow Section */}
-          <div className="w-full md:w-3/5 relative bg-gray-100 h-[400px] md:h-auto group">
+          <div className="w-full md:w-3/5 relative bg-gray-50 h-[500px] md:h-auto group">
             <div className="w-full h-full relative overflow-hidden">
               {images.map((img, idx) => (
                 <div 
                   key={idx}
-                  className={`absolute inset-0 transition-all duration-1000 ease-in-out transform ${
+                  className={`absolute inset-0 transition-all duration-1000 ease-in-out transform flex items-center justify-center ${
                     idx === currentImageIndex ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-105'
                   }`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  {/* Changed object-cover to object-contain to show full image */}
+                  <img src={img} alt="" className="w-full h-full object-contain" />
                 </div>
               ))}
             </div>
@@ -220,7 +220,7 @@ function App() {
             )}
           </div>
 
-          <div className="w-full md:w-2/5 p-8 md:p-12 overflow-y-auto">
+          <div className="w-full md:w-2/5 p-8 md:p-12 overflow-y-auto bg-white border-l border-gray-100">
               <div className="flex items-center space-x-2 text-[10px] font-black text-tintura-red mb-2 uppercase tracking-widest">
                   <span>{selectedProduct.category}</span>
                   <span>/</span>

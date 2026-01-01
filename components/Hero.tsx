@@ -8,18 +8,18 @@ const Hero: React.FC = () => {
       <div className="absolute inset-0 z-0">
         <div className="absolute top-0 right-0 w-3/4 h-full bg-gradient-to-l from-gray-900 to-transparent opacity-80 z-10"></div>
         <img 
-            src="https://images.unsplash.com/photo-1610384104075-e05c8cf25148?auto=format&fit=crop&w=2000&q=80" 
+            src="https://xxwlkcpxoojpejiwyzzv.supabase.co/storage/v1/object/public/Products/Gemini_Generated_Image_m030skm030skm030.png?auto=format&fit=crop&w=2000&q=80" 
             alt="Hero Background" 
             className="absolute inset-0 w-full h-full object-cover opacity-60 object-top"
         />
         {/* Red Triangles/Lines inspired by PDF Page 1 */}
-        <div className="absolute bottom-0 left-0 w-full h-1/2 opacity-30 pointer-events-none z-20">
+        {/*<div className="absolute bottom-0 left-0 w-full h-1/2 opacity-30 pointer-events-none z-20">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
                 <path d="M0 100 L40 0 L100 100 Z" fill="none" stroke="#E31E24" strokeWidth="0.5" />
                 <path d="M20 100 L60 20 L80 100 Z" fill="none" stroke="#E31E24" strokeWidth="0.5" />
                 <path d="M-20 80 L30 30 L50 100 Z" fill="none" stroke="#E31E24" strokeWidth="0.5" />
             </svg>
-        </div>
+        </div>*/}
       </div>
 
       <div className="container mx-auto px-4 z-30 relative grid md:grid-cols-2 gap-12 items-center">
