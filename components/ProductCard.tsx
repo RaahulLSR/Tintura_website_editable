@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Product } from '../types';
-import { Plus, Zap, Droplets, Shield } from 'lucide-react';
+import { Plus, Zap, Droplets, Shield, ImageIcon } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -10,6 +10,13 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+
+  // Use the first image from image_urls, or fallback to legacy image_url
+  const displayImage = (product.image_urls && product.image_urls.length > 0) 
+    ? product.image_urls[0] 
+    : product.image_url;
+
+  const imageCount = product.image_urls?.length || 0;
 
   const techBadge = (type: string) => {
       if (type === 'dryfit') return <div className="bg-blue-600 text-white p-1 rounded-sm" title="Dry Fit"><Zap className="w-3 h-3" /></div>;
@@ -20,7 +27,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
 
   return (
     <div 
-      className="group relative bg-white cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-500 flex flex-col h-full"
+      className="group relative bg-white cursor-pointer shadow-sm hover:shadow-2xl transition-all duration-500 flex flex-col h-full border border-gray-100"
       onClick={() => onClick(product)}
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-gray-100">
@@ -30,21 +37,40 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
           </div>
         )}
 
-        <img 
-          src={product.image_url} 
-          alt={product.name}
-          loading="lazy"
-          onLoad={() => setIsImageLoaded(true)}
-          className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-105 ${isImageLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-md'}`}
-        />
+        {displayImage ? (
+          <img 
+            src={displayImage} 
+            alt={product.name}
+            loading="lazy"
+            onLoad={() => setIsImageLoaded(true)}
+            className={`w-full h-full object-cover transition-all duration-700 group-hover:scale-110 ${isImageLoaded ? 'opacity-100 blur-0' : 'opacity-0 blur-md'}`}
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-gray-300">
+            <ImageIcon className="w-12 h-12 mb-2" />
+            <span className="text-[10px] uppercase font-bold">No Preview</span>
+          </div>
+        )}
         
+        {/* BIG STYLE CODE OVERLAY */}
+        <div className="absolute top-0 right-0 z-20 bg-tintura-black text-white px-4 py-2 font-display font-bold text-2xl tracking-tighter opacity-90 group-hover:bg-tintura-red transition-colors duration-300">
+          #{product.style_code}
+        </div>
+
+        {imageCount > 1 && (
+          <div className="absolute bottom-3 left-3 z-20 bg-white/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 flex items-center gap-1 shadow-sm">
+            <ImageIcon className="w-3 h-3" />
+            {imageCount} VIEWS
+          </div>
+        )}
+
         <div className="absolute bottom-0 right-0 z-20">
-          <button className="bg-tintura-black text-white p-4 hover:bg-tintura-red transition-colors duration-300 shadow-lg">
+          <button className="bg-tintura-black text-white p-4 hover:bg-tintura-red transition-colors duration-300 shadow-lg translate-y-full group-hover:translate-y-0 transition-transform">
             <Plus className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="absolute top-3 right-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 translate-x-4 group-hover:translate-x-0 z-20">
+        <div className="absolute top-12 right-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 translate-x-4 group-hover:translate-x-0 z-20">
             {product.features?.slice(0, 3).map(f => (
                 <div key={f}>{techBadge(f)}</div>
             ))}
@@ -63,9 +89,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
         <div>
             <div className="flex justify-between items-center mb-2">
                 <span className="text-[10px] font-bold tracking-[0.2em] text-tintura-red uppercase">{product.category}</span>
-                <span className="text-[10px] font-bold tracking-widest text-gray-400">#{product.style_code}</span>
+                <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">{product.garment_type}</span>
             </div>
-            <h3 className="text-xl font-display font-bold text-gray-900 mb-2 leading-none group-hover:text-tintura-red transition-colors">
+            <h3 className="text-xl font-display font-bold text-gray-900 mb-2 leading-none group-hover:text-tintura-red transition-colors uppercase">
             {product.name}
             </h3>
             <p className="text-sm text-gray-500 line-clamp-2 leading-relaxed font-light">

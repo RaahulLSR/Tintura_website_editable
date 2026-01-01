@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Product } from '../types';
-import { Plus, Trash2, Edit2, X, Save, Loader2, AlertCircle, Image as ImageIcon, PlusCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Save, Loader2, AlertCircle, Image as ImageIcon, PlusCircle, ArrowUp, ArrowDown } from 'lucide-react';
 
 const AdminView: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -10,7 +10,6 @@ const AdminView: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [localPreview, setLocalPreview] = useState<string | null>(null);
   
   // State for dynamic options
   const [categories, setCategories] = useState<string[]>(['CASUALS', 'LITE', 'SPORTZ']);
@@ -30,7 +29,6 @@ const AdminView: React.FC = () => {
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      
       setProducts(data || []);
       
       if (data) {
@@ -39,9 +37,7 @@ const AdminView: React.FC = () => {
         setCategories(uniqueCats);
         setGarmentTypes(uniqueTypes);
       }
-      setErrorMsg(null);
     } catch (err: any) {
-      console.error('Error fetching:', err);
       setErrorMsg(`Failed to fetch styles: ${err.message}`);
     } finally {
       setLoading(false);
@@ -71,9 +67,9 @@ const AdminView: React.FC = () => {
           ctx.drawImage(img, 0, 0, width, height);
           canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('WebP conversion failed')), 'image/webp', 0.85);
         };
-        img.onerror = () => reject(new Error('Image failed to load for conversion'));
+        img.onerror = () => reject(new Error('Image failed to load'));
       };
-      reader.onerror = () => reject(new Error('FileReader failed to read image'));
+      reader.onerror = () => reject(new Error('FileReader failed'));
     });
   };
 
@@ -84,6 +80,9 @@ const AdminView: React.FC = () => {
     setErrorMsg(null);
     setLoading(true);
     
+    // Fallback logic for backward compatibility
+    const currentImages = editingProduct.image_urls || (editingProduct.image_url ? [editingProduct.image_url] : []);
+
     const productData: any = {
       style_code: editingProduct.style_code?.toString() || '',
       name: editingProduct.name || 'Unnamed Style',
@@ -91,18 +90,14 @@ const AdminView: React.FC = () => {
       garment_type: editingProduct.garment_type || 'MENS',
       description: editingProduct.description || '',
       features: Array.isArray(editingProduct.features) ? editingProduct.features : [],
-      image_url: editingProduct.image_url || '',
+      image_url: currentImages[0] || '', // primary for legacy
+      image_urls: currentImages, // multi
       color: editingProduct.color || '',
       available_sizes: editingProduct.available_sizes || '',
       fabric_type: editingProduct.fabric_type || ''
     };
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-          throw new Error("Admin session not found. Please re-enter OTP.");
-      }
-
       if (editingProduct.id) {
         const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
         if (error) throw error;
@@ -111,14 +106,62 @@ const AdminView: React.FC = () => {
         if (error) throw error;
       }
       setEditingProduct(null);
-      setLocalPreview(null);
       fetchProducts();
     } catch (error: any) {
-      console.error('Database Save Error:', error);
-      setErrorMsg(`Save failed: ${error.message}. Ensure you have run the RLS policy SQL in your Supabase dashboard.`);
+      setErrorMsg(`Save failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    setUploading(true);
+    setErrorMsg(null);
+    
+    const newUrls: string[] = [...(editingProduct?.image_urls || [])];
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const webpBlob = await convertToWebP(file);
+        const fileName = `style-${Date.now()}-${i}.webp`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('Products')
+          .upload(fileName, webpBlob, { contentType: 'image/webp' });
+          
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('Products').getPublicUrl(fileName);
+        newUrls.push(data.publicUrl);
+      }
+      
+      setEditingProduct(prev => ({ ...prev, image_urls: newUrls }));
+    } catch (err: any) {
+      setErrorMsg(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeImageUrl = (index: number) => {
+    const newUrls = [...(editingProduct?.image_urls || [])];
+    newUrls.splice(index, 1);
+    setEditingProduct({ ...editingProduct, image_urls: newUrls });
+  };
+
+  const moveImage = (index: number, direction: 'up' | 'down') => {
+    const urls = [...(editingProduct?.image_urls || [])];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= urls.length) return;
+    
+    const temp = urls[index];
+    urls[index] = urls[targetIndex];
+    urls[targetIndex] = temp;
+    setEditingProduct({ ...editingProduct, image_urls: urls });
   };
 
   const handleAddOption = (type: 'category' | 'type') => {
@@ -134,104 +177,27 @@ const AdminView: React.FC = () => {
     }
   };
 
-  const addFeature = () => {
-    if (!newFeature.trim()) return;
-    const currentFeatures = editingProduct?.features || [];
-    if (!currentFeatures.includes(newFeature.trim())) {
-      setEditingProduct({ ...editingProduct, features: [...currentFeatures, newFeature.trim()] });
-    }
-    setNewFeature('');
-  };
-
-  const removeFeature = (index: number) => {
-    const currentFeatures = [...(editingProduct?.features || [])];
-    currentFeatures.splice(index, 1);
-    setEditingProduct({ ...editingProduct, features: currentFeatures });
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    // Immediate Local Preview
-    const previewUrl = URL.createObjectURL(file);
-    setLocalPreview(previewUrl);
-    setErrorMsg(null);
-    setUploading(true);
-    
-    console.log("Starting upload for file:", file.name);
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-          throw new Error("Auth session missing. Refresh the page and login again.");
-      }
-
-      const webpBlob = await convertToWebP(file);
-      console.log("WebP conversion complete. Size:", (webpBlob.size / 1024).toFixed(2), "KB");
-
-      const fileName = `style-${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
-      // Using root level to minimize permission complexity
-      const filePath = fileName;
-      
-      console.log("Uploading to Supabase bucket 'Products' at path:", filePath);
-
-      const { error: uploadError, data: uploadData } = await supabase.storage
-        .from('Products')
-        .upload(filePath, webpBlob, { 
-            contentType: 'image/webp',
-            cacheControl: '3600',
-            upsert: false
-        });
-        
-      if (uploadError) {
-        console.error("Supabase Storage Error:", uploadError);
-        throw uploadError;
-      }
-      
-      console.log("Upload success:", uploadData);
-
-      const { data } = supabase.storage.from('Products').getPublicUrl(filePath);
-      console.log("Generated Public URL:", data.publicUrl);
-
-      setEditingProduct(prev => ({ ...prev, image_url: data.publicUrl }));
-      setErrorMsg(null); // Clear errors on success
-    } catch (err: any) {
-      console.error('Detailed Upload Failure:', err);
-      setErrorMsg(`Upload failed: ${err.message}. If you see 'violates row-level security policy', you MUST run the SQL for Storage RLS in Supabase.`);
-      setLocalPreview(null); // Reset preview if upload failed
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleCloseEditor = () => {
-    setEditingProduct(null);
-    setLocalPreview(null);
-    setErrorMsg(null);
-  };
-
   return (
     <div className="pt-32 pb-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
         <div>
           <h1 className="text-4xl font-display font-bold text-tintura-black uppercase tracking-tight">Style Inventory</h1>
-          <p className="text-gray-500">Manage your collections and performance features.</p>
+          <p className="text-gray-500">Manage multi-image collections and performance features.</p>
         </div>
         <button 
-          onClick={() => setEditingProduct({ category: 'CASUALS', garment_type: 'MENS', features: [] })}
+          onClick={() => setEditingProduct({ category: 'CASUALS', garment_type: 'MENS', features: [], image_urls: [] })}
           className="bg-tintura-red text-white px-8 py-3 font-bold hover:bg-tintura-black transition-all flex items-center space-x-2 shadow-lg"
         >
           <Plus className="w-5 h-5" />
-          <span>CREATE NEW STYLE</span>
+          <span>REGISTER NEW STYLE</span>
         </button>
       </div>
 
       {errorMsg && (
-        <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 flex items-start space-x-3 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 flex items-start space-x-3">
           <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
           <div className="flex-grow">
-            <p className="text-red-700 text-sm font-bold uppercase mb-1">Upload or Database Error</p>
+            <p className="text-red-700 text-sm font-bold uppercase mb-1">Error</p>
             <p className="text-red-600 text-xs">{errorMsg}</p>
           </div>
           <button onClick={() => setErrorMsg(null)} className="ml-auto p-1 hover:bg-red-100 rounded-full transition-colors">
@@ -251,8 +217,7 @@ const AdminView: React.FC = () => {
                   <th className="px-6 py-4">Image</th>
                   <th className="px-6 py-4">Code</th>
                   <th className="px-6 py-4">Name</th>
-                  <th className="px-6 py-4">Target</th>
-                  <th className="px-6 py-4">Category</th>
+                  <th className="px-6 py-4">Type</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
@@ -261,25 +226,16 @@ const AdminView: React.FC = () => {
                   <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-3">
                       <div className="w-10 h-14 bg-gray-100 rounded-sm overflow-hidden border">
-                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                        <img src={p.image_urls?.[0] || p.image_url} alt="" className="w-full h-full object-cover" />
                       </div>
                     </td>
-                    <td className="px-6 py-3 font-mono text-xs font-bold text-tintura-red">#{p.style_code}</td>
-                    <td className="px-6 py-3 font-bold text-gray-800">{p.name}</td>
-                    <td className="px-6 py-3">
-                      <span className={`text-[9px] font-black px-2 py-1 rounded ${p.garment_type === 'BOYS' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                        {p.garment_type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className="text-[9px] border-2 border-gray-100 text-gray-500 px-2 py-0.5 rounded font-black">
-                        {p.category}
-                      </span>
-                    </td>
+                    <td className="px-6 py-3 font-mono text-sm font-bold text-tintura-red uppercase tracking-tighter">#{p.style_code}</td>
+                    <td className="px-6 py-3 font-bold text-gray-800 uppercase">{p.name}</td>
+                    <td className="px-6 py-3"><span className="text-[9px] font-black px-2 py-1 bg-gray-100 rounded">{p.garment_type}</span></td>
                     <td className="px-6 py-3 text-right">
                       <div className="flex justify-end space-x-2">
-                        <button onClick={() => setEditingProduct(p)} className="p-2 text-gray-400 hover:text-tintura-accent transition-colors"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={async () => { if(confirm('Delete this style permanently?')) { try { const { error } = await supabase.from('products').delete().eq('id', p.id); if (error) throw error; fetchProducts(); } catch (err: any) { setErrorMsg(err.message); } }}} className="p-2 text-gray-400 hover:text-tintura-red transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingProduct(p)} className="p-2 text-gray-400 hover:text-blue-500"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={async () => { if(confirm('Delete style?')) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="p-2 text-gray-400 hover:text-tintura-red"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -291,116 +247,95 @@ const AdminView: React.FC = () => {
       </div>
 
       {editingProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={handleCloseEditor}></div>
-          <div className="relative bg-white w-full max-w-3xl p-8 rounded-sm shadow-2xl overflow-y-auto max-h-[90vh] border-t-8 border-tintura-red">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setEditingProduct(null)}></div>
+          <div className="relative bg-white w-full max-w-4xl p-8 rounded-sm shadow-2xl overflow-y-auto max-h-[90vh] border-t-8 border-tintura-red">
             <div className="flex justify-between items-center mb-8 border-b pb-4">
-              <h2 className="text-2xl font-display font-bold uppercase tracking-tight">
-                {editingProduct.id ? 'Edit Style Details' : 'Register New Style'}
-              </h2>
-              <button onClick={handleCloseEditor} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+              <h2 className="text-2xl font-display font-bold uppercase tracking-tight">Style Setup</h2>
+              <button onClick={() => setEditingProduct(null)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6" /></button>
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Unique Style Code</label>
-                  <input required className="w-full border-b-2 py-2 outline-none focus:border-tintura-red font-mono" value={editingProduct.style_code || ''} onChange={e => setEditingProduct({...editingProduct, style_code: e.target.value})} />
+                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Style Code</label>
+                  <input required className="w-full border-b-2 py-2 outline-none focus:border-tintura-red font-mono text-xl" value={editingProduct.style_code || ''} onChange={e => setEditingProduct({...editingProduct, style_code: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Display Name</label>
-                  <input required className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
+                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Style Name</label>
+                  <input required className="w-full border-b-2 py-2 outline-none focus:border-tintura-red text-xl" value={editingProduct.name || ''} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <label className="flex justify-between text-[10px] font-black uppercase text-gray-400 mb-1">
-                    <span>Target Segment</span>
-                    <button type="button" onClick={() => handleAddOption('type')} className="text-tintura-red hover:underline">+ NEW</button>
-                  </label>
-                  <select className="w-full border-b-2 py-2 outline-none bg-white" value={editingProduct.garment_type} onChange={e => setEditingProduct({...editingProduct, garment_type: e.target.value})}>
+                   <label className="flex justify-between text-[10px] font-black uppercase text-gray-400 mb-1">Target Segment <button type="button" onClick={() => handleAddOption('type')} className="text-tintura-red">+ NEW</button></label>
+                   <select className="w-full border-b-2 py-2 outline-none bg-white" value={editingProduct.garment_type} onChange={e => setEditingProduct({...editingProduct, garment_type: e.target.value})}>
                     {garmentTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
+                   </select>
                 </div>
                 <div>
-                  <label className="flex justify-between text-[10px] font-black uppercase text-gray-400 mb-1">
-                    <span>Collection Category</span>
-                    <button type="button" onClick={() => handleAddOption('category')} className="text-tintura-red hover:underline">+ NEW</button>
-                  </label>
-                  <select className="w-full border-b-2 py-2 outline-none bg-white" value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
+                   <label className="flex justify-between text-[10px] font-black uppercase text-gray-400 mb-1">Category <button type="button" onClick={() => handleAddOption('category')} className="text-tintura-red">+ NEW</button></label>
+                   <select className="w-full border-b-2 py-2 outline-none bg-white" value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}>
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                   </select>
+                </div>
+              </div>
+
+              {/* Multi-Image Management */}
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-400 mb-3">Style Gallery (Upload Multiple & Reorder)</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-6">
+                  {editingProduct.image_urls?.map((url, idx) => (
+                    <div key={idx} className="relative group aspect-[3/4] bg-gray-100 border rounded-sm overflow-hidden">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                        <div className="flex space-x-1">
+                          <button type="button" onClick={() => moveImage(idx, 'up')} className="bg-white/90 p-1.5 rounded-full hover:bg-white"><ArrowUp className="w-3 h-3" /></button>
+                          <button type="button" onClick={() => moveImage(idx, 'down')} className="bg-white/90 p-1.5 rounded-full hover:bg-white"><ArrowDown className="w-3 h-3" /></button>
+                        </div>
+                        <button type="button" onClick={() => removeImageUrl(idx)} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                      <div className="absolute bottom-1 left-1 bg-tintura-black text-white text-[9px] px-1.5 py-0.5 font-black uppercase">
+                        Pos: {idx + 1} {idx === 0 && "(Cover)"}
+                      </div>
+                    </div>
+                  ))}
+                  <label className="aspect-[3/4] border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
+                    <PlusCircle className="w-8 h-8 text-gray-300" />
+                    <span className="text-[10px] font-black uppercase text-gray-400 mt-2">Add Images</span>
+                    <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                  </label>
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Colors</label>
-                  <input placeholder="Red, Black" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.color || ''} onChange={e => setEditingProduct({...editingProduct, color: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Sizes</label>
-                  <input placeholder="S-XL" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.available_sizes || ''} onChange={e => setEditingProduct({...editingProduct, available_sizes: e.target.value})} />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Fabric</label>
-                  <input placeholder="BioWash Cotton" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.fabric_type || ''} onChange={e => setEditingProduct({...editingProduct, fabric_type: e.target.value})} />
-                </div>
+                <input placeholder="Colors" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.color || ''} onChange={e => setEditingProduct({...editingProduct, color: e.target.value})} />
+                <input placeholder="Sizes" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.available_sizes || ''} onChange={e => setEditingProduct({...editingProduct, available_sizes: e.target.value})} />
+                <input placeholder="Fabric" className="w-full border-b-2 py-2 outline-none focus:border-tintura-red" value={editingProduct.fabric_type || ''} onChange={e => setEditingProduct({...editingProduct, fabric_type: e.target.value})} />
               </div>
 
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Technical Features</label>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {editingProduct.features?.map((f, i) => (
-                    <span key={i} className="bg-gray-100 text-[10px] font-bold px-2 py-1 rounded-sm flex items-center space-x-1">
+                    <span key={i} className="bg-gray-100 text-[10px] font-bold px-2 py-1 flex items-center space-x-1">
                       <span>{f}</span>
-                      <button type="button" onClick={() => removeFeature(i)} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
+                      <button type="button" onClick={() => { const feats = [...(editingProduct.features || [])]; feats.splice(i,1); setEditingProduct({...editingProduct, features: feats}) }} className="text-gray-400 hover:text-red-500"><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                 </div>
                 <div className="flex space-x-2">
-                  <input className="flex-grow border-b-2 py-2 outline-none text-sm" placeholder="Add a performance feature..." value={newFeature} onChange={e => setNewFeature(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addFeature())} />
-                  <button type="button" onClick={addFeature} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors"><PlusCircle className="w-5 h-5 text-tintura-red" /></button>
+                  <input className="flex-grow border-b-2 py-2 outline-none text-sm" placeholder="Add feature..." value={newFeature} onChange={e => setNewFeature(e.target.value)} onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), setNewFeature(''), setEditingProduct({...editingProduct, features: [...(editingProduct.features || []), newFeature.trim()]}))} />
+                  <button type="button" onClick={() => { if(newFeature) { setEditingProduct({...editingProduct, features: [...(editingProduct.features || []), newFeature.trim()]}); setNewFeature(''); } }} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100"><PlusCircle className="w-5 h-5 text-tintura-red" /></button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Description</label>
-                <textarea className="w-full border-2 p-3 text-sm h-24 outline-none focus:border-tintura-red rounded-sm resize-none" value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
-              </div>
+              <textarea className="w-full border-2 p-3 text-sm h-24 outline-none focus:border-tintura-red rounded-sm resize-none" placeholder="Description..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
 
-              <div>
-                <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Style Visual (WebP optimized)</label>
-                <div className="flex items-center space-x-4 border-2 border-dashed border-gray-200 p-6 rounded-sm bg-gray-50">
-                  {(localPreview || editingProduct.image_url) ? (
-                    <div className="w-16 h-20 bg-white border p-1 group relative">
-                        <img src={localPreview || editingProduct.image_url} alt="" className="w-full h-full object-cover" />
-                        {uploading && (
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                            <Loader2 className="w-5 h-5 animate-spin text-white" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Plus className="text-white w-4 h-4" />
-                        </div>
-                    </div>
-                  ) : (
-                    <div className="w-16 h-20 bg-white flex items-center justify-center border-2 border-dashed border-gray-300"><ImageIcon className="text-gray-300" /></div>
-                  )}
-                  <div className="flex-grow">
-                    <label className="cursor-pointer bg-tintura-black text-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest hover:bg-tintura-red transition-all inline-block shadow-md">
-                      {uploading ? 'Processing Image...' : (localPreview || editingProduct.image_url ? 'Change Image' : 'Select File')}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
-                    </label>
-                    <p className="text-[9px] text-gray-400 mt-2 font-bold uppercase">Optimized WebP conversion will run automatically.</p>
-                  </div>
-                </div>
-              </div>
-
-              <button disabled={loading || uploading || (!editingProduct.image_url && !localPreview)} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
-                {loading ? <Loader2 className="animate-spin" /> : <Save />}
-                <span>{editingProduct.id ? 'UPDATE DATABASE RECORD' : 'COMMIT TO DATABASE'}</span>
+              <button disabled={loading || uploading || !(editingProduct.image_urls?.length)} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
+                {uploading ? <Loader2 className="animate-spin" /> : <Save />}
+                <span>{editingProduct.id ? 'UPDATE STYLE DATA' : 'FINALIZE & SAVE STYLE'}</span>
               </button>
             </form>
           </div>

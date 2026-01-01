@@ -1,9 +1,9 @@
 
+
 export enum Category {
   CASUALS = 'CASUALS',
   SPORTZ = 'SPORTZ',
   LITE = 'LITE',
-  // Fix: Added BOYS category to match usage in constants.ts
   BOYS = 'BOYS'
 }
 
@@ -22,11 +22,13 @@ export interface Product {
   id: string;
   style_code: string;
   name: string;
-  category: string; // Changed to string to support dynamic options
-  garment_type: string; // Changed to string to support dynamic options
+  category: string;
+  garment_type: string;
   description: string;
   features: string[]; 
-  image_url: string;
+  image_url?: string; // Kept for legacy compatibility
+  // Fix: Made image_urls optional to accommodate products defined in constants.ts that only have image_url
+  image_urls?: string[]; // New: support for multiple images
   color?: string;
   available_sizes?: string;
   fabric_type?: string;
