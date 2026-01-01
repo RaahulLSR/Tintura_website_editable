@@ -27,7 +27,6 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Fix: Replaced any with a specific type or any for browser-specific return types of setInterval
   const slideshowTimerRef = useRef<any>(null);
 
   const ADMIN_EMAIL = 'raahullsr@gmail.com';
@@ -70,8 +69,6 @@ function App() {
     setFilteredProducts(result);
   }, [activeCategory, activeFeature, products]);
 
-  // Slideshow Logic
-  // Fix: Added safety fallbacks for image_urls since it is now optional in the Product interface
   const handleNextImage = useCallback(() => {
     if (!selectedProduct) return;
     const urls = selectedProduct.image_urls || (selectedProduct.image_url ? [selectedProduct.image_url] : []);
@@ -79,7 +76,6 @@ function App() {
     setCurrentImageIndex(prev => (prev + 1) % urls.length);
   }, [selectedProduct]);
 
-  // Fix: Added safety fallbacks for image_urls since it is now optional in the Product interface
   const handlePrevImage = useCallback(() => {
     if (!selectedProduct) return;
     const urls = selectedProduct.image_urls || (selectedProduct.image_url ? [selectedProduct.image_url] : []);
@@ -92,7 +88,7 @@ function App() {
       setCurrentImageIndex(0);
       const urls = selectedProduct.image_urls || (selectedProduct.image_url ? [selectedProduct.image_url] : []);
       if (urls.length > 1) {
-        slideshowTimerRef.current = setInterval(handleNextImage, 3500);
+        slideshowTimerRef.current = setInterval(handleNextImage, 4500);
       }
     } else {
       if (slideshowTimerRef.current) clearInterval(slideshowTimerRef.current);
@@ -166,108 +162,126 @@ function App() {
     
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setSelectedProduct(null)}></div>
-        <div className="relative bg-white w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col md:flex-row animate-in fade-in zoom-in duration-300">
-          <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 z-[70] bg-white p-2 rounded-full hover:bg-tintura-red hover:text-white shadow-lg transition-colors">
+        <div className="absolute inset-0 bg-black/95 backdrop-blur-xl" onClick={() => setSelectedProduct(null)}></div>
+        
+        {/* Fixed default size: max-w-6xl (approx 1152px) for consistency */}
+        <div className="relative bg-white w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)] flex flex-col md:flex-row animate-in fade-in zoom-in duration-300">
+          <button 
+            onClick={() => setSelectedProduct(null)} 
+            className="absolute top-4 right-4 z-[70] bg-white/20 hover:bg-tintura-red text-white p-2 rounded-full backdrop-blur-md transition-all shadow-lg border border-white/20"
+          >
             <X className="w-6 h-6" />
           </button>
 
-          {/* Image Slideshow Section */}
-          <div className="w-full md:w-3/5 relative bg-gray-50 h-[500px] md:h-auto group">
-            <div className="w-full h-full relative overflow-hidden">
+          {/* Image Container: Proportional 60% width with deep neutral background to blend any letterboxing */}
+          <div className="relative bg-neutral-950 w-full md:w-3/5 h-[400px] md:h-auto group flex items-center justify-center">
+            <div className="w-full h-full relative flex items-center justify-center overflow-hidden">
               {images.map((img, idx) => (
                 <div 
                   key={idx}
-                  className={`absolute inset-0 transition-all duration-1000 ease-in-out transform flex items-center justify-center ${
-                    idx === currentImageIndex ? 'opacity-100 translate-x-0 scale-100' : 'opacity-0 translate-x-10 scale-105'
+                  className={`absolute inset-0 transition-all duration-700 ease-in-out flex items-center justify-center p-4 md:p-8 ${
+                    idx === currentImageIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'
                   }`}
                 >
-                  {/* Changed object-cover to object-contain to show full image */}
-                  <img src={img} alt="" className="w-full h-full object-contain" />
+                  <img 
+                    src={img} 
+                    alt="" 
+                    className="max-h-full max-w-full w-auto block object-contain shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]" 
+                  />
                 </div>
               ))}
             </div>
 
-            {/* Nav Arrows */}
+            {/* Navigation controls */}
             {images.length > 1 && (
               <>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handlePrevImage(); if(slideshowTimerRef.current) clearInterval(slideshowTimerRef.current); }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 z-30 bg-white/20 hover:bg-white p-3 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                  className="absolute left-6 top-1/2 -translate-y-1/2 z-30 bg-black/40 hover:bg-white text-white hover:text-black p-4 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 border border-white/10"
                 >
                   <ChevronLeft className="w-6 h-6" />
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleNextImage(); if(slideshowTimerRef.current) clearInterval(slideshowTimerRef.current); }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 z-30 bg-white/20 hover:bg-white p-3 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                  className="absolute right-6 top-1/2 -translate-y-1/2 z-30 bg-black/40 hover:bg-white text-white hover:text-black p-4 rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 border border-white/10"
                 >
                   <ChevronRight className="w-6 h-6" />
                 </button>
+                
+                {/* Dot indicators positioned at the bottom center of the image area */}
+                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex space-x-2">
+                  {images.map((_, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => { setCurrentImageIndex(idx); if(slideshowTimerRef.current) clearInterval(slideshowTimerRef.current); }}
+                      className={`h-1.5 transition-all rounded-full ${idx === currentImageIndex ? 'bg-tintura-red w-8' : 'bg-white/20 w-4 hover:bg-white'}`}
+                    />
+                  ))}
+                </div>
               </>
-            )}
-
-            {/* Dot indicators */}
-            {images.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex space-x-2">
-                {images.map((_, idx) => (
-                  <button 
-                    key={idx}
-                    onClick={() => { setCurrentImageIndex(idx); if(slideshowTimerRef.current) clearInterval(slideshowTimerRef.current); }}
-                    className={`w-2.5 h-2.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-tintura-red w-8' : 'bg-white/50 hover:bg-white'}`}
-                  />
-                ))}
-              </div>
             )}
           </div>
 
-          <div className="w-full md:w-2/5 p-8 md:p-12 overflow-y-auto bg-white border-l border-gray-100">
-              <div className="flex items-center space-x-2 text-[10px] font-black text-tintura-red mb-2 uppercase tracking-widest">
-                  <span>{selectedProduct.category}</span>
-                  <span>/</span>
-                  <span className="text-blue-500">{selectedProduct.garment_type}</span>
-                  <span className="ml-auto bg-tintura-black text-white px-3 py-1 text-base tracking-tighter">#{selectedProduct.style_code}</span>
-              </div>
-              <h2 className="text-4xl font-display font-bold text-gray-900 mb-4 uppercase leading-none">{selectedProduct.name}</h2>
-              <p className="text-gray-600 mb-8 leading-relaxed font-light">{selectedProduct.description}</p>
-
-              <div className="space-y-6 mb-8">
-                  {selectedProduct.fabric_type && (
-                      <div className="flex items-center space-x-3">
-                          <Box className="w-5 h-5 text-tintura-red" />
-                          <div><p className="text-[10px] font-black uppercase text-gray-400">Fabric Composition</p><p className="font-bold">{selectedProduct.fabric_type}</p></div>
-                      </div>
-                  )}
-                  {selectedProduct.available_sizes && (
-                      <div className="flex items-center space-x-3">
-                          <Ruler className="w-5 h-5 text-tintura-red" />
-                          <div><p className="text-[10px] font-black uppercase text-gray-400">Available Sizes</p><p className="font-bold">{selectedProduct.available_sizes}</p></div>
-                      </div>
-                  )}
-                  {selectedProduct.color && (
-                      <div className="flex items-center space-x-3">
-                          <Tag className="w-5 h-5 text-tintura-red" />
-                          <div><p className="text-[10px] font-black uppercase text-gray-400">Available Colors</p><p className="font-bold">{selectedProduct.color}</p></div>
-                      </div>
-                  )}
-              </div>
-
-              {selectedProduct.features && selectedProduct.features.length > 0 && (
-                <div className="mb-8 border-t pt-6">
-                  <h4 className="font-black text-[10px] uppercase text-tintura-red mb-4 tracking-widest">Performance Specs</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedProduct.features.map(f => (
-                       <div key={f} className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                          <Check className="w-4 h-4 text-green-500" />
-                          <span>{f}</span>
-                       </div>
-                    ))}
-                  </div>
+          {/* Details Area: Proportional 40% width */}
+          <div className="w-full md:w-2/5 p-8 md:p-12 overflow-y-auto bg-white flex flex-col justify-between">
+              <div>
+                <div className="flex items-center space-x-2 text-[10px] font-black text-tintura-red mb-3 uppercase tracking-widest">
+                    <span>{selectedProduct.category}</span>
+                    <span className="text-gray-300">/</span>
+                    <span className="text-blue-600">{selectedProduct.garment_type}</span>
+                    <span className="ml-auto bg-tintura-black text-white px-3 py-1 text-base tracking-tighter">#{selectedProduct.style_code}</span>
                 </div>
-              )}
+                <h2 className="text-4xl font-display font-bold text-gray-900 mb-6 uppercase leading-none tracking-tight">{selectedProduct.name}</h2>
+                <p className="text-gray-500 mb-8 leading-relaxed font-light text-sm">{selectedProduct.description}</p>
+
+                <div className="grid grid-cols-1 gap-4 mb-8">
+                    {selectedProduct.fabric_type && (
+                        <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-sm">
+                            <Box className="w-5 h-5 text-tintura-red" />
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Material</p>
+                              <p className="font-bold text-sm">{selectedProduct.fabric_type}</p>
+                            </div>
+                        </div>
+                    )}
+                    {selectedProduct.available_sizes && (
+                        <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-sm">
+                            <Ruler className="w-5 h-5 text-tintura-red" />
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Measurements</p>
+                              <p className="font-bold text-sm">{selectedProduct.available_sizes}</p>
+                            </div>
+                        </div>
+                    )}
+                    {selectedProduct.color && (
+                        <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-sm">
+                            <Tag className="w-5 h-5 text-tintura-red" />
+                            <div>
+                              <p className="text-[9px] font-black uppercase text-gray-400 leading-none mb-1">Available Tones</p>
+                              <p className="font-bold text-sm">{selectedProduct.color}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {selectedProduct.features && selectedProduct.features.length > 0 && (
+                  <div className="mb-8 pt-4">
+                    <h4 className="font-black text-[10px] uppercase text-tintura-red mb-4 tracking-widest">Technology Features</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProduct.features.map(f => (
+                         <div key={f} className="flex items-center space-x-2 text-[11px] font-black bg-neutral-900 text-white px-3 py-2 uppercase tracking-tighter">
+                            <Check className="w-3 h-3 text-tintura-red" />
+                            <span>{f}</span>
+                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               
               <button 
                 onClick={handleInquiryToPurchase}
-                className="w-full bg-tintura-black text-white font-black py-4 hover:bg-tintura-red transition-all uppercase tracking-widest text-sm shadow-xl"
+                className="w-full bg-tintura-red text-white font-black py-5 hover:bg-black transition-all uppercase tracking-widest text-sm shadow-xl"
               >
                 Inquiry to Purchase
               </button>

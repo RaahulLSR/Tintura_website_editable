@@ -11,7 +11,6 @@ const AdminView: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // State for dynamic options
   const [categories, setCategories] = useState<string[]>(['CASUALS', 'LITE', 'SPORTZ']);
   const [garmentTypes, setGarmentTypes] = useState<string[]>(['MENS', 'BOYS']);
   const [newFeature, setNewFeature] = useState('');
@@ -80,8 +79,10 @@ const AdminView: React.FC = () => {
     setErrorMsg(null);
     setLoading(true);
     
-    // Fallback logic for backward compatibility
-    const currentImages = editingProduct.image_urls || (editingProduct.image_url ? [editingProduct.image_url] : []);
+    // Ensure we have a valid array for image_urls
+    const currentImages = Array.isArray(editingProduct.image_urls) 
+      ? editingProduct.image_urls 
+      : (editingProduct.image_url ? [editingProduct.image_url] : []);
 
     const productData: any = {
       style_code: editingProduct.style_code?.toString() || '',
@@ -90,25 +91,34 @@ const AdminView: React.FC = () => {
       garment_type: editingProduct.garment_type || 'MENS',
       description: editingProduct.description || '',
       features: Array.isArray(editingProduct.features) ? editingProduct.features : [],
-      image_url: currentImages[0] || '', // primary for legacy
-      image_urls: currentImages, // multi
+      image_url: currentImages[0] || '', 
+      image_urls: currentImages, 
       color: editingProduct.color || '',
       available_sizes: editingProduct.available_sizes || '',
       fabric_type: editingProduct.fabric_type || ''
     };
 
     try {
+      let error;
       if (editingProduct.id) {
-        const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
-        if (error) throw error;
+        const { error: updateError } = await supabase.from('products').update(productData).eq('id', editingProduct.id);
+        error = updateError;
       } else {
-        const { error } = await supabase.from('products').insert([productData]);
-        if (error) throw error;
+        const { error: insertError } = await supabase.from('products').insert([productData]);
+        error = insertError;
       }
+      
+      if (error) {
+        if (error.message.includes('image_urls')) {
+          throw new Error("The 'image_urls' column is missing in your database. Please run the SQL command provided in the chat instructions.");
+        }
+        throw error;
+      }
+
       setEditingProduct(null);
       fetchProducts();
     } catch (error: any) {
-      setErrorMsg(`Save failed: ${error.message}`);
+      setErrorMsg(error.message || "Save failed. Check your database columns.");
     } finally {
       setLoading(false);
     }
@@ -194,13 +204,13 @@ const AdminView: React.FC = () => {
       </div>
 
       {errorMsg && (
-        <div className="mb-8 p-4 bg-red-50 border-l-4 border-red-500 flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+        <div className="mb-8 p-6 bg-red-50 border-l-4 border-red-500 flex items-start space-x-4">
+          <AlertCircle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
           <div className="flex-grow">
-            <p className="text-red-700 text-sm font-bold uppercase mb-1">Error</p>
-            <p className="text-red-600 text-xs">{errorMsg}</p>
+            <p className="text-red-700 text-sm font-black uppercase mb-1">Database Schema Required</p>
+            <p className="text-red-600 text-xs leading-relaxed">{errorMsg}</p>
           </div>
-          <button onClick={() => setErrorMsg(null)} className="ml-auto p-1 hover:bg-red-100 rounded-full transition-colors">
+          <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-red-100 rounded-full transition-colors">
             <X className="w-4 h-4 text-red-400" />
           </button>
         </div>
@@ -282,7 +292,6 @@ const AdminView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Multi-Image Management */}
               <div>
                 <label className="block text-[10px] font-black uppercase text-gray-400 mb-3">Style Gallery (Upload Multiple & Reorder)</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-6">
@@ -333,7 +342,7 @@ const AdminView: React.FC = () => {
 
               <textarea className="w-full border-2 p-3 text-sm h-24 outline-none focus:border-tintura-red rounded-sm resize-none" placeholder="Description..." value={editingProduct.description || ''} onChange={e => setEditingProduct({...editingProduct, description: e.target.value})} />
 
-              <button disabled={loading || uploading || !(editingProduct.image_urls?.length)} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
+              <button disabled={loading || uploading || !(editingProduct.image_urls?.length || editingProduct.image_url)} type="submit" className="w-full bg-tintura-red text-white py-4 font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center space-x-2 shadow-xl disabled:opacity-50">
                 {uploading ? <Loader2 className="animate-spin" /> : <Save />}
                 <span>{editingProduct.id ? 'UPDATE STYLE DATA' : 'FINALIZE & SAVE STYLE'}</span>
               </button>
