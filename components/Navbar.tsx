@@ -18,19 +18,19 @@ const Navbar: React.FC<NavbarProps> = ({ activeCategory, onCategoryChange }) => 
     { label: 'LITE', value: 'LITE' },
   ];
 
+  const logoUrl = "https://xxwlkcpxoojpejiwyzzv.supabase.co/storage/v1/object/public/Products/TINTURA%20CASUALS%20LOGO_edited.jpg";
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           
           <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => onCategoryChange('ALL')}>
-            <div className="bg-tintura-black text-white px-3 py-1 font-display font-bold text-2xl tracking-tighter transform -skew-x-12">
-              TINTURA
-            </div>
-            <div className="ml-2 flex flex-col justify-center">
-              <span className="text-xs font-bold tracking-widest text-tintura-red leading-none">CASUALS</span>
-              <span className="text-xs font-bold tracking-widest text-tintura-black leading-none">& SPORTZ</span>
-            </div>
+            <img 
+              src={logoUrl} 
+              alt="TINTURA CASUALS & SPORTZ" 
+              className="h-14 md:h-16 w-auto object-contain"
+            />
           </div>
 
           <div className="hidden md:flex space-x-6 items-center">

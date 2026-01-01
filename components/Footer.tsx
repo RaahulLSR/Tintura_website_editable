@@ -1,8 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MapPin, Phone, Mail, Instagram, Facebook } from 'lucide-react';
 
 const Footer: React.FC = () => {
+  const logoUrl = "https://xxwlkcpxoojpejiwyzzv.supabase.co/storage/v1/object/public/Products/TINTURA%20CASUALS%20LOGO_edited.jpg";
+
   return (
     <footer id="contact-section" className="bg-tintura-black text-white pt-16 pb-8 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -11,8 +13,11 @@ const Footer: React.FC = () => {
           {/* Brand Info */}
           <div>
             <div className="mb-6">
-                <h2 className="text-3xl font-display font-bold tracking-tighter">TINTURA<sup className="text-sm">®</sup></h2>
-                <p className="text-tintura-red font-bold tracking-widest text-sm">CASUALS & SPORTZ</p>
+                <img 
+                  src={logoUrl} 
+                  alt="TINTURA" 
+                  className="h-20 w-auto object-contain mb-4"
+                />
             </div>
             <p className="text-gray-400 mb-6">
                 The secret of great styles is to feel good in what we wear. Unleash the athlete within.
